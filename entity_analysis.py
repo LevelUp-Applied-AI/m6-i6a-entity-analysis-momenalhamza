@@ -136,7 +136,8 @@ def aggregate_entity_stats(entity_df, articles_df):
                           by article category (columns: category,
                           entity_label, count)
     """
-    # Top entities
+    # 1. Top Entities
+    # -------------------------
     top_entities = (
         entity_df
         .groupby(["entity_text", "entity_label"])
@@ -146,10 +147,14 @@ def aggregate_entity_stats(entity_df, articles_df):
         .head(20)
     )
 
-    # Label counts
+    # -------------------------
+    # 2. Label Counts
+    # -------------------------
     label_counts = entity_df["entity_label"].value_counts().to_dict()
 
-    # Co-occurrence
+    # -------------------------
+    # 3. Co-occurrence
+    # -------------------------
     pair_counts = {}
 
     grouped = entity_df.groupby("text_id")
@@ -158,31 +163,31 @@ def aggregate_entity_stats(entity_df, articles_df):
 
         entities = group["entity_text"].unique()
 
-        pairs = combinations(sorted(entities), 2)
-
-        for pair in pairs:
+        for pair in combinations(sorted(entities), 2):
 
             pair_counts[pair] = pair_counts.get(pair, 0) + 1
 
-    co_occurrence_rows = []
+    co_occurrence_rows = [
+        {
+            "entity_a": a,
+            "entity_b": b,
+            "co_count": count
+        }
+        for (a, b), count in pair_counts.items()
+    ]
 
-    for (entity_a, entity_b), count in pair_counts.items():
+    co_occurrence = pd.DataFrame(co_occurrence_rows)
 
-        if count >= 2:
+    if not co_occurrence.empty:
+        co_occurrence = (
+            co_occurrence
+            .sort_values(by="co_count", ascending=False)
+            .head(50)
+        )
 
-            co_occurrence_rows.append({
-                "entity_a": entity_a,
-                "entity_b": entity_b,
-                "co_count": count
-            })
-
-    co_occurrence = (
-        pd.DataFrame(co_occurrence_rows)
-        .sort_values(by="co_count", ascending=False)
-        .head(50)
-    )
-
-    # Per-category stats
+    # -------------------------
+    # 4. Per-category stats
+    # -------------------------
     merged = entity_df.merge(
         articles_df[["id", "category"]],
         left_on="text_id",
@@ -197,14 +202,15 @@ def aggregate_entity_stats(entity_df, articles_df):
         .sort_values(by="count", ascending=False)
     )
 
-    stats = {
+    # -------------------------
+    # Final output
+    # -------------------------
+    return {
         "top_entities": top_entities,
         "label_counts": label_counts,
         "co_occurrence": co_occurrence,
         "per_category": per_category
     }
-
-    return stats
 
 
 def visualize_entity_distribution(stats, output_path="entity_distribution.png"):
